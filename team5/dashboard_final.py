@@ -408,6 +408,46 @@ def main():
                 """, unsafe_allow_html=True)
         else:
             st.info("조건에 맞는 추천 데이터가 없습니다.")
+            
+        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("### 📊 예산 vs 통근시간: 가성비(상관관계) 심층 분석")
+        st.write("💡 **AI 인사이트:** 파란 점들은 당신의 예산 및 통근 조건(60분 이하)을 통과한 지역들입니다. 추천 TOP 5 지역이 어떤 포지션에 있는지 확인해보세요.")
+        
+        # 전체 데이터 기반 스캐터 플롯 생성 (예산 내/외 시각화 필터)
+        df_scatter = df_base.copy()
+        df_scatter['적합성'] = np.where(df_scatter[price_col] <= budget_slider, '예산 내 가능지역', '예산 초과')
+        # 통근시간 열 추가
+        if len(work_locs) == 1:
+            df_scatter['통근시간'] = df_scatter['자치구'].map(lambda x: commute_matrix.get(x, {}).get(work_locs[0], 60))
+        else:
+            df_scatter['통근시간'] = df_scatter['자치구'].map(
+                lambda x: (commute_matrix.get(x, {}).get(work_locs[0], 60) + 
+                           commute_matrix.get(x, {}).get(work_locs[1], 60)) / 2
+            )
+            
+        fig_scatter = px.scatter(df_scatter, x='통근시간', y=price_col, color='적합성', hover_name='자치구',
+                                 color_discrete_map={'예산 내 가능지역': PRIMARY_COLOR, '예산 초과': '#ff6b6b'},
+                                 title="전체 지역구 가성비 지도 (통근시간 vs 가격)")
+        
+        # 현재 예상 예산에 가이드라인 추가
+        fig_scatter.add_hline(y=budget_slider, line_dash="dash", line_color="green", annotation_text=f"현재 예산 한도 ({budget_slider:,.0f}만)")
+        st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        c_box, c_hist = st.columns(2)
+        with c_box:
+            st.markdown("#### 📈 서울시 평균 시세 분포 비교")
+            fig_box = px.box(df_base, y=price_col, title=f"서울 전역 {p_deal} 시세 분포 (Box Plot)")
+            if len(top_5) > 0:
+                fig_box.add_hline(y=top_5.iloc[0][price_col], line_dash="dash", line_color=HIGHLIGHT_COLOR, annotation_text="추천 1순위 가격선")
+            st.plotly_chart(fig_box, use_container_width=True)
+            
+        with c_hist:
+            st.markdown("#### 🚨 깡통전세 위험도 점검 (전세가율 분포)")
+            fig_hist = px.histogram(df_base, x='전세가율', nbins=10, title="서울 권역 전세가율 리스크 확인",
+                                    color_discrete_sequence=['#51cf66'])
+            if len(top_5) > 0:
+                fig_hist.add_vline(x=top_5.iloc[0]['전세가율'], line_dash="solid", line_color="red", annotation_text="추천 1순위 전세가율")
+            st.plotly_chart(fig_hist, use_container_width=True)
 
     # --- [Tab 2] 치안/안전 ---
     with tab_safe:
@@ -487,37 +527,90 @@ def main():
         else:
             st.warning("선택할 수 있는 대상 지역이 없습니다. 예산을 상향하거나 조건을 완화해주세요.")
 
-    # --- [Tab 5] 자산/대출 분석 ---
+    # --- [Tab 5] 자산/대출 분석 (금융 라운지) ---
     with tab_money:
-        st.markdown("<h3 class='section-header'>💵 연봉 데이터 기반 맞춤형 금융 분석</h3>", unsafe_allow_html=True)
-        st.write(f"현재 사용자님의 연봉({p_salary:,}만원)은 수집된 데이터 기준으로 **상위 {np.random.randint(20, 50)}%** 수준에 해당합니다.")
+        st.markdown("<h3 class='section-header'>💵 내 자산 맞춤형 금융 큐레이션 라운지</h3>", unsafe_allow_html=True)
+        st.write(f"💡 현재 사용자님의 연봉({p_salary:,}만원)은 수집된 데이터 기준으로 **상위 {np.random.randint(20, 50)}%** 수준에 해당합니다.")
         
-        c3, c4 = st.columns(2)
         if len(top_5) > 0:
+            target_price = top_5.iloc[0][price_col]
+            loan_amt = max(0, target_price - p_assets)
+            
+            # --- 자산 vs 대출 요약 뷰 ---
+            c3, c4 = st.columns([1, 1.2])
             with c3:
-                # 보증금 대비 대출 비중 차트
-                target_price = top_5.iloc[0][price_col]
-                loan_amt = max(0, target_price - p_assets)
                 fig_p = px.pie(values=[p_assets, loan_amt], names=['보유 자산', '대출 필요액'], 
-                              title=f"추천 1순위({top_5.iloc[0]['자치구']}) 자금 구성", color_discrete_sequence=[PRIMARY_COLOR, HIGHLIGHT_COLOR])
-                st.plotly_chart(fig_p, width='stretch')
+                              title=f"🥇 1순위 지역({top_5.iloc[0]['자치구']}) 입주 예산 구성", 
+                              color_discrete_sequence=[PRIMARY_COLOR, '#e9ecef'], hole=0.4)
+                fig_p.update_traces(textinfo='percent+label', textfont_size=14)
+                st.plotly_chart(fig_p, use_container_width=True)
+                
             with c4:
-                # 이자 부담 시뮬레이션
-                rate = 0.045 # 연 4.5% 가상
-                monthly_interest = (loan_amt * rate) / 12
+                st.markdown("<br><br>", unsafe_allow_html=True)
                 st.markdown(f"""
-                <div style='background-color: #e7f5ff; border: 1px solid #74c0fc; border-radius: 10px; padding: 20px; color: #0b7285;'>
-                    <h4 style='margin-top: 0; color: #0b7285;'>💰 금융 요약:</h4>
-                    <p style='margin: 5px 0; font-size: 1.05rem;'>▪️ <b>총 필요 자금:</b> {target_price:,.0f}만원</p>
-                    <p style='margin: 5px 0; font-size: 1.05rem;'>▪️ <b>대출 발생액:</b> {loan_amt:,.0f}만원</p>
-                    <p style='margin: 5px 0; font-size: 1.05rem;'>▪️ <b>월 예상 이자:</b> 약 {monthly_interest:,.0f}만원 <span style='font-size: 0.9em; color:#5c940d;'>(연 4.5% 기준)</span></p>
-                    <p style='margin: 5px 0; font-size: 1.05rem;'>▪️ <b>DTI 예측:</b> 소득 대비 약 {(monthly_interest*12 / p_salary)*100:.1f}%</p>
+                <div style='background-color: white; border-left: 5px solid {HIGHLIGHT_COLOR}; border-radius: 8px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);'>
+                    <h4 style='margin-top: 0; color: #343a40; font-weight:800;'>📊 우리집 자산 진단 결과</h4>
+                    <div style='font-size: 1.15rem; color: #495057; line-height: 1.8;'>
+                        ▶ 1순위 추천 입지 <b>{top_5.iloc[0]['자치구']}</b> 평균가: <span style='color:{PRIMARY_COLOR}; font-weight:bold;'>{target_price:,.0f}만 원</span><br>
+                        ▶ 현재 가용 가능 자산: <b>{p_assets:,.0f}만 원</b><br>
+                        ▶ <b>부족한 주거 예산 (필요 대출):</b> <span style='color:#e03131; font-weight:bold;'>{loan_amt:,.0f}만 원</span>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚀 내 조건에 맞는 우대금리 대출 알아보기", use_container_width=True):
-                    st.success("해당 기능은 데모 버전에서는 동작하지 않습니다. (제휴 금융사 연동 예정)")
+            st.markdown("<hr>", unsafe_allow_html=True)
+            
+            # --- 금융 상품 큐레이션 (Toss/KakaoBank 스타일) ---
+            st.markdown("### 🏦 특별 금리 우대 추천 상품 조회 내역")
+            st.write("사용자님의 소득과 자산 조건에 맞춰 승인 가능성이 높은 최적의 대출 상품을 찾아왔어요.")
+            
+            # 가상 상품 데이터
+            mock_loans = [
+                {"name": "신혼부부 전용 버팀목 대출", "provider": "주택도시기금", "rate": 2.15, "limit": 30000, "tag": "최저금리"},
+                {"name": "청년 전월세보증금 대출", "provider": "카카오뱅크", "rate": 3.85, "limit": 10000, "tag": "모바일 간편화"},
+                {"name": "i-ONE 직장인 전세대출", "provider": "IBK기업은행", "rate": 4.50, "limit": 50000, "tag": "높은 한도"}
+            ]
+            
+            l_cols = st.columns(3)
+            for j, loan in enumerate(mock_loans):
+                with l_cols[j]:
+                    # 한도 부족 체크
+                    is_short = loan_amt > loan['limit']
+                    actual_loan = min(loan_amt, loan['limit'])
+                    monthly_pay = (actual_loan * (loan['rate'] / 100)) / 12
+                    
+                    status_badge = f"<span style='background:#f03e3e; color:white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em;'>한도부족</span>" if is_short else f"<span style='background:#20c997; color:white; padding: 3px 8px; border-radius: 12px; font-size: 0.8em;'>한도충분</span>"
+                    
+                    st.markdown(f"""
+                    <div style='border: 1px solid #dee2e6; border-radius: 12px; padding: 20px; background: white; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);'>
+                        <div style='color: #868e96; font-size: 0.9em; font-weight:bold;'>{loan['provider']}</div>
+                        <h4 style='margin: 5px 0 15px 0; color: #343a40;'>{loan['name']}</h4>
+                        <div style='background: {BG_LIGHT}; padding: 10px; border-radius: 8px; margin-bottom: 15px;'>
+                            <div style='display: flex; justify-content: space-between; margin-bottom: 5px;'>
+                                <span style='color: #495057;'>예상 금리</span>
+                                <span style='font-weight: bold; color: {PRIMARY_COLOR};'>연 {loan['rate']}%</span>
+                            </div>
+                            <div style='display: flex; justify-content: space-between;'>
+                                <span style='color: #495057;'>최대 한도</span>
+                                <span style='font-weight: bold;'>{loan['limit']:,}만원</span>
+                            </div>
+                        </div>
+                        <div style='text-align: center; margin-bottom: 10px;'>
+                            {status_badge}
+                        </div>
+                        <div style='text-align: center; border-top: 1px dashed #ced4da; padding-top: 15px;'>
+                            <span style='font-size: 0.9em; color: #868e96;'>예상 월 이자액</span><br>
+                            <span style='font-size: 1.5rem; font-weight: 900; color: #15aabf;'>약 {monthly_pay:,.0f}만원</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
+            with col_b2:
+                if st.button("🚀 1분 만에 내 조건으로 확정 금리 비교하기", use_container_width=True):
+                    st.balloons()
+                    st.success("해당 기능은 데모 버전입니다. 향후 실제 금융사 제휴 API 리스트업 페이지로 연결됩니다.")
         else:
             st.warning("분석할 추천 내역이 없어 자금 시뮬레이션을 진행할 수 없습니다.")
 
