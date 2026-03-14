@@ -336,47 +336,17 @@ def main():
     df_display = df_result[df_result['통근시간'] <= 60] # 기본 60분 컷
 
     # ------------------------------------------------------------------------------
-    # [상단 하이라이트 요약 - TOP 5 퀵뷰]
+    # [탑 뷰 - 안내 메시지 등]
     # ------------------------------------------------------------------------------
-    if not df_display.empty:
-        st.markdown("<h3 class='section-header' style='margin-top: 10px;'>🌟 AI 종합 분석: 최적의 신혼 주거지 TOP 5</h3>", unsafe_allow_html=True)
-        top_5_quick = df_display.head(5)
-        
-        cols = st.columns(5)
-        for i, (idx, row) in enumerate(top_5_quick.iterrows()):
-            with cols[i]:
-                badge_color = "#e03131" if i == 0 else "#1971c2" if i == 1 else "#339af0"
-                font_weight = "900" if i == 0 else "700"
-                border_style = f"2px solid {badge_color}" if i == 0 else "1px solid #dee2e6"
-                bg_color = "#fff5f5" if i==0 else "white"
-                
-                st.markdown(f"""
-                <div style="background-color: {bg_color}; border: {border_style}; border-radius: 12px; padding: 15px; text-align: center; height: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                    <div style="font-size: 1.2rem; font-weight: {font_weight}; color: {badge_color}; margin-bottom: 5px;">
-                        👑 {i+1}위
-                    </div>
-                    <div style="font-size: 1.5rem; font-weight: 800; color: #343a40; margin-bottom: 10px;">
-                        {row['자치구']}
-                    </div>
-                    <div style="font-size: 0.85rem; color: #495057; text-align: left; background: #f8f9fa; padding: 8px; border-radius: 6px;">
-                        ▪️ <b>종합점수:</b> {row['종합점수']:.1f}점<br>
-                        ▪️ <b>통근:</b> {row['통근시간']:.0f}분<br>
-                        ▪️ <b>예산:</b> {row[price_col]:,.0f}만<br>
-                        🏢 <b>추천단지:</b><br><span style="color:#2b8a3e; font-size:0.8rem;">{row.get('대표단지', '주요 아파트')}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="background-color: #e7f5ff; border-left: 4px solid #339af0; padding: 15px; margin-top: 15px; margin-bottom: 20px; border-radius: 4px; color: #0b7285;">
-            💡 <b>서비스 이용 팁:</b> 상단의 <b>[💵 자산/대출 분석]</b> 탭으로 이동하시면, 1순위 추천 입지를 기준으로 한 <b>정확한 맞춤형 대출 한도와 월 상환액</b>을 즉시 확인할 수 있습니다!
-        </div>
-        """, unsafe_allow_html=True)
-
     if df_display.empty:
         st.warning("⚠️ 선택하신 조건에 맞는 지역이 없습니다. 예산을 조금 더 높여보세요.")
         return
+        
+    st.markdown("""
+    <div style="background-color: #e7f5ff; border-left: 4px solid #339af0; padding: 15px; margin-top: 5px; margin-bottom: 20px; border-radius: 4px; color: #0b7285;">
+        💡 <b>서비스 이용 팁:</b> [🏆 추천 TOP 5] 에서 결과를 확인하시고, <b>[💵 자산/대출 분석]</b> 탭으로 이동하시면 추천 입지 기준 <b>원클릭 맞춤형 대출 한도</b>를 바로 확인할 수 있습니다!
+    </div>
+    """, unsafe_allow_html=True)
 
     # ------------------------------------------------------------------------------
     # [탭 메뉴] 리포트 상세
@@ -387,31 +357,52 @@ def main():
 
     # --- [Tab 1] 추천 TOP 5 ---
     with tab_rec:
-        st.markdown("<h3 class='section-header'>🏆 맞춤형 최적 입지 TOP 5</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 class='section-header'>🌟 AI 종합 분석: 맞춤형 최적 입지 TOP 5</h3>", unsafe_allow_html=True)
         top_5 = df_display.head(5).copy()
         
         if len(top_5) > 0:
+            cols = st.columns(5)
             for i, (idx, row) in enumerate(top_5.iterrows()):
-                loan_needed = max(0, row[price_col] - p_assets)
-                st.markdown(f"""
-                <div class='premium-card' style='margin-bottom: 15px;'>
-                    <h4 style='margin-top:0; color:{PRIMARY_COLOR};'>
-                        <span class='rank-badge'>{i+1}위</span> {row['자치구']}
-                    </h4>
-                    <div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>
-                        <div style='flex: 1; min-width: 200px;'>
-                            <p style='margin: 5px 0;'>🏢 <b>대표 아파트 단지:</b> <span style='color:{SECONDARY_COLOR}; font-weight:bold;'>{row.get('대표단지', '주요 단지')}</span> 주변</p>
-                            <p style='margin: 5px 0;'>💰 <b>{p_deal} 시세:</b> 평균 {row[price_col]:,.0f}만원</p>
-                            <p style='margin: 5px 0;'>💵 <b>필요 대출 예상액:</b> 약 {loan_needed:,.0f}만원</p>
+                with cols[i]:
+                    badge_color = "#e03131" if i == 0 else "#1971c2" if i == 1 else "#339af0"
+                    font_weight = "900" if i == 0 else "700"
+                    border_style = f"2px solid {badge_color}" if i == 0 else "1px solid #dee2e6"
+                    bg_color = "#fff5f5" if i==0 else "white"
+                    loan_needed = max(0, row[price_col] - p_assets)
+                    
+                    # 별점 및 등급 산정 처리
+                    score = row['종합점수']
+                    if score >= 90:
+                        grade, stars, g_color = 'S', '★★★★★', '#d9480f'
+                    elif score >= 75:
+                        grade, stars, g_color = 'A', '★★★★☆', '#f08c00'
+                    elif score >= 55:
+                        grade, stars, g_color = 'B', '★★★☆☆', '#2b8a3e'
+                    elif score >= 35:
+                        grade, stars, g_color = 'C', '★★☆☆☆', '#1971c2'
+                    else:
+                        grade, stars, g_color = 'D', '★☆☆☆☆', '#868e96'
+                    
+                    st.markdown(f"""
+                    <div style="background-color: {bg_color}; border: {border_style}; border-radius: 12px; padding: 15px; text-align: center; height: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                        <div style="font-size: 1.2rem; font-weight: {font_weight}; color: {badge_color}; margin-bottom: 5px;">
+                            👑 {i+1}위
                         </div>
-                        <div style='flex: 1; min-width: 200px;'>
-                            <p style='margin: 5px 0;'>🚇 <b>목적지 통근:</b> 평균 {row['통근시간']:.0f}분 소요</p>
-                            <p style='margin: 5px 0;'>🏥 <b>인프라 점수:</b> {row['인프라_점수']:.1f}점 / 100점</p>
-                            <p style='margin: 5px 0;'>🛡️ <b>치안 점수:</b> {row['치안_점수']:.1f}점 / 100점</p>
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #343a40; margin-bottom: 5px;">
+                            {row['자치구']}
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <span style="font-size: 1.2rem; color: #fcc419; letter-spacing: 2px;">{stars}</span>
+                        </div>
+                        <div style="font-size: 0.85rem; color: #495057; text-align: left; background: #f8f9fa; padding: 8px; border-radius: 6px;">
+                            ▪️ <b>종합평가:</b> {score:.1f}점 <span style='color:{g_color}; font-weight:bold;'>({grade}등급)</span><br>
+                            ▪️ <b>통근:</b> {row['통근시간']:.0f}분<br>
+                            ▪️ <b>예산:</b> {row[price_col]:,.0f}만<br>
+                            🏢 <b>추천단지:</b><br><span style="color:#2b8a3e; font-size:0.8rem; line-height:1.2; display:inline-block; margin-top:3px;">{row.get('대표단지', '주요 단지')}</span><br>
+                            💵 <b>필요대출액:</b> {loan_needed:,.0f}만
                         </div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
         else:
             st.info("조건에 맞는 추천 데이터가 없습니다.")
             
@@ -483,6 +474,57 @@ def main():
                                title="TOP 5 지역별 주요 인프라(병원, 마트, 공원) 시설 수 비교",
                                color_discrete_sequence=['#ff922b', '#51cf66', '#339af0'])
             st.plotly_chart(fig_infra, width='stretch')
+            
+            st.markdown("<hr>", unsafe_allow_html=True)
+            st.markdown("#### 🗺️ 자치구별 생활 인프라 분포 밀도 (시뮬레이션)")
+            st.write("선택한 자치구의 병원, 마트, 공원의 전반적인 인프라 분포 밀도를 시각화한 지도입니다. (실제 데이터 수량 기반)")
+            
+            sel_gu_infra = st.selectbox("인프라 상세 보기 대상 자치구", df_display['자치구'].tolist(), index=0, key="infra_map_sel")
+            
+            # 선택 자치구 인프라 수량 파악
+            infra_data = df_display[df_display['자치구'] == sel_gu_infra].iloc[0]
+            h_count = int(infra_data.get('병원수', 0))
+            m_count = int(infra_data.get('마트수', 0))
+            p_count = int(infra_data.get('공원수', 0))
+            
+            # 폴리움 맵 중심 설정
+            center_lat, center_lon = GU_COORDS.get(sel_gu_infra, [37.5665, 126.9780])
+            m_infra = folium.Map(location=[center_lat, center_lon], zoom_start=13)
+            
+            # 자치구 중심 마커
+            folium.Marker(
+                [center_lat, center_lon], 
+                tooltip=f"{sel_gu_infra} 중심",
+                icon=folium.Icon(color='lightgray', icon='info-sign')
+            ).add_to(m_infra)
+            
+            # 밀도 기반 임의 랜덤 마커 생성기 (퍼포먼스 위해 각 항목별 최대 시각화 갯수 제한)
+            np.random.seed(hash(sel_gu_infra) % 2**32) # 구역별로 시드가 고정되도록 처리
+            
+            def add_density_markers(count, color, tooltip_prefix):
+                display_count = min(count, 50) # 수량이 많아도 렌더렉 방지를 위해 시각적 한계치 50개 적용
+                for _ in range(display_count):
+                    # 정규분포를 사용해 중심에 가깝게 군집되도록 좌표 시뮬레이션
+                    lat = center_lat + np.random.normal(0, 0.012)
+                    lon = center_lon + np.random.normal(0, 0.015)
+                    folium.CircleMarker(
+                        location=[lat, lon],
+                        radius=7,
+                        color='white',
+                        weight=1.5,
+                        fill=True,
+                        fill_color=color,
+                        fill_opacity=0.8,
+                        tooltip=f"📍 {tooltip_prefix}"
+                    ).add_to(m_infra)
+            
+            # 차트와 동일한 색상 체계 적용
+            add_density_markers(h_count, '#ff922b', '병원/의료시설')
+            add_density_markers(m_count, '#51cf66', '대형마트/쇼핑')
+            add_density_markers(p_count, '#339af0', '공원/녹지')
+            
+            st_folium(m_infra, width=1400, height=500, key="infra_density_map")
+            
         else:
             st.info("비교할 데이터가 없습니다.")
 
@@ -494,42 +536,60 @@ def main():
             sel_work = work_locs[0]
             total_time = commute_matrix.get(sel_gu, {}).get(sel_work, 60)
             
-            # 상세 타임라인 분할 (가상)
+            st.markdown(f"#### 📍 {sel_gu} ➡️ {sel_work} (총 {total_time}분)")
+            st.markdown("<hr>", unsafe_allow_html=True)
+            
+            # --- 대중교통 노선 시뮬레이션 안내 ---
+            st.markdown("#### 🧭 최적 대중교통 노선 안내 (시뮬레이션)")
+            
+            # 가상 노선 데이터 로직 (구역과 목적지에 따른 임의 노선 배정용)
+            subway_lines = {"강남역": "지하철 2호선", "여의도역": "지하철 5호선", "광화문역": "지하철 5호선", "성수역": "지하철 2호선"}
+            route_line = subway_lines.get(sel_work, "간선 버스")
+            route_color = "#3bc9db" if "지하철" in route_line else "#20c997"
+            
+            # 상세 타임라인 분할 (가상 비율 배분)
             walk_to_station = 7
             subway_ride = total_time - 15 # 환승 및 대기 포함
             walk_to_work = 8
             
-            st.markdown(f"#### 📍 {sel_gu} ➡️ {sel_work} (총 {total_time}분)")
-            
-            # 진행 바 시각화 복구
-            progress_html = f"""
-            <div style='width: 100%; display: flex; align-items: center; margin-top: 20px; font-family: sans-serif;'>
-                <div style='width: {walk_to_station/total_time*100}%; background-color: #A0D468; padding: 15px 5px; text-align: center; border-radius: 10px 0 0 10px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>
-                    🚶 {walk_to_station}분<br><small>도보</small>
-                </div>
-                <div style='width: {subway_ride/total_time*100}%; background-color: #4A90E2; padding: 15px 5px; text-align: center; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>
-                    🚇 {subway_ride}분<br><small>대중교통 탑승/환승</small>
-                </div>
-                <div style='width: {walk_to_work/total_time*100}%; background-color: #A0D468; padding: 15px 5px; text-align: center; border-radius: 0 10px 10px 0; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>
-                    🏢 {walk_to_work}분<br><small>목적지 도보</small>
+            st.markdown(f"""
+            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 12px; padding: 25px; margin-top: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <div style="flex: 1; text-align: center;">
+                        <div style="font-size: 1.2rem; font-weight: bold; color: #495057;">출발</div>
+                        <div style="font-size: 1.5rem; color: #1c7ed6; font-weight: 800;">{sel_gu}</div>
+                        <div style="font-size: 0.9rem; color: #868e96;">단지 인근 정류장</div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div style="font-size: 2rem; color: #ced4da;">➔</div>
+                        <div style="background-color: {route_color}; color: white; display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; margin-top: 5px;">
+                            {route_line} 탑승
+                        </div>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <div style="font-size: 1.2rem; font-weight: bold; color: #495057;">도착</div>
+                        <div style="font-size: 1.5rem; color: #e03131; font-weight: 800;">{sel_work}</div>
+                        <div style="font-size: 0.9rem; color: #868e96;">직장 도보권</div>
+                    </div>
                 </div>
             </div>
-            <div style='margin-top: 15px; color: gray; font-size: 0.9em; text-align: center;'>
-                * 위 시간은 평균치를 바탕으로 도보 및 환승 대기시간을 임의 배분한 시뮬레이션입니다.
-            </div>
-            """
-            st.markdown(progress_html, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
             
-            st.markdown("<hr>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("#### 🗺️ 츨발지 - 목적지 직행 경로 지도 (참고용)")
             
             WORK_COORDS = {"강남역": [37.4979, 127.0276], "여의도역": [37.5218, 126.9243], 
                            "광화문역": [37.5709, 126.9768], "성수역": [37.5446, 127.0567]}
             target = WORK_COORDS.get(sel_work, [37.5665, 126.9780])
             m_sim = folium.Map(location=[(GU_COORDS[sel_gu][0] + target[0])/2, (GU_COORDS[sel_gu][1] + target[1])/2], zoom_start=12)
-            folium.Marker(GU_COORDS[sel_gu], tooltip="출발지", icon=folium.Icon(color='blue')).add_to(m_sim)
-            folium.Marker(target, tooltip="직장", icon=folium.Icon(color='red')).add_to(m_sim)
-            folium.PolyLine([GU_COORDS[sel_gu], target], color=PRIMARY_COLOR, weight=5).add_to(m_sim)
-            st_folium(m_sim, width=1400, height=450, key="detailed_sim_map")
+            
+            # 마커 및 직선 경로 표시
+            folium.Marker(GU_COORDS[sel_gu], tooltip="출발지", icon=folium.Icon(color='blue', icon='home')).add_to(m_sim)
+            folium.Marker(target, tooltip="직장", icon=folium.Icon(color='red', icon='briefcase')).add_to(m_sim)
+            folium.PolyLine([GU_COORDS[sel_gu], target], color=PRIMARY_COLOR, weight=4, dash_array='5', tooltip="직선 (최단망) 거리").add_to(m_sim)
+            
+            st_folium(m_sim, width=1400, height=400, key="detailed_sim_map")
+            
         else:
             st.warning("선택할 수 있는 대상 지역이 없습니다. 예산을 상향하거나 조건을 완화해주세요.")
 
@@ -633,8 +693,21 @@ def main():
             
             col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
             with col_c2:
-                if st.button("🔍 내 맞춤 대출 한도 조회하기", use_container_width=True):
-                    st.success("해당 제휴 금융사(앱/웹) 한도 조회 페이지로 안전하게 이동합니다.")
+                # Custom Toss-style CTA Button
+                st.markdown("""
+                <a href="https://www.tossbank.com/product-service/loans/loan" target="_blank" style="text-decoration: none;">
+                    <div style="background-color: #0050FF; color: white; border-radius: 12px; padding: 18px 20px; text-align: center; font-size: 1.15rem; font-weight: bold; box-shadow: 0 4px 10px rgba(0, 80, 255, 0.3); transition: all 0.2s ease-in-out; cursor: pointer;">
+                        🔍 내 맞춤 대출 한도 조회하기
+                    </div>
+                </a>
+                <style>
+                    div[style*="background-color: #0050FF"]:hover {
+                        background-color: #003ECC !important;
+                        box-shadow: 0 6px 14px rgba(0, 80, 255, 0.4) !important;
+                        transform: translateY(-2px);
+                    }
+                </style>
+                """, unsafe_allow_html=True)
         else:
             st.warning("분석할 추천 내역이 없어 자금 시뮬레이션을 진행할 수 없습니다.")
 
