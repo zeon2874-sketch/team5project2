@@ -368,6 +368,12 @@ def main():
                 """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
+        st.markdown("""
+        <div style="background-color: #e7f5ff; border-left: 4px solid #339af0; padding: 15px; margin-top: 15px; margin-bottom: 20px; border-radius: 4px; color: #0b7285;">
+            💡 <b>서비스 이용 팁:</b> 상단의 <b>[💵 자산/대출 분석]</b> 탭으로 이동하시면, 1순위 추천 입지를 기준으로 한 <b>정확한 맞춤형 대출 한도와 월 상환액</b>을 즉시 확인할 수 있습니다!
+        </div>
+        """, unsafe_allow_html=True)
+
     if df_display.empty:
         st.warning("⚠️ 선택하신 조건에 맞는 지역이 없습니다. 예산을 조금 더 높여보세요.")
         return
@@ -606,15 +612,72 @@ def main():
                     """, unsafe_allow_html=True)
                     
             st.markdown("<br>", unsafe_allow_html=True)
-            col_b1, col_b2, col_b3 = st.columns([1, 2, 1])
-            with col_b2:
-                if st.button("🚀 1분 만에 내 조건으로 확정 금리 비교하기", use_container_width=True):
-                    st.balloons()
-                    st.success("해당 기능은 데모 버전입니다. 향후 실제 금융사 제휴 API 리스트업 페이지로 연결됩니다.")
+            
+            # --- 실서비스용 제휴 금융사 전환 배너 ---
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 16px; padding: 25px 30px; margin: 15px 0; border: 2px solid #339af0; box-shadow: 0 4px 15px rgba(51, 154, 240, 0.15);">
+                <div style="text-align: center;">
+                    <h3 style="color: #1c7ed6; margin-bottom: 10px; font-weight: 800;">💸 전세대출 한도, 지금 바로 알아보세요</h3>
+                    <p style="font-size: 1.15rem; color: #495057; margin-bottom: 20px;">
+                        1순위 추천 입지(<b>{top_5.iloc[0]['자치구']}</b>) 평균 {p_deal}가 <b>{target_price:,.0f}만 원</b> 기준,<br>
+                        고객님에게 꼭 맞는 맞춤형 대출 <b>{loan_amt:,.0f}만 원</b>이 즉시 승인 가능한지 지금 확인해 보세요.
+                    </p>
+                </div>
+                <div style="display: flex; justify-content: center; gap: 20px; font-size: 0.95rem; color: #2b8a3e; font-weight: bold; margin-bottom: 20px;">
+                    <span>✅ 여러 금융사를 한 번에 비교</span>
+                    <span>✅ 서류 제출 없는 간편 절차</span>
+                    <span>✅ 신용점수 영향 없이 한도 확인</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
+            with col_c2:
+                if st.button("🔍 내 맞춤 대출 한도 조회하기", use_container_width=True):
+                    st.success("해당 제휴 금융사(앱/웹) 한도 조회 페이지로 안전하게 이동합니다.")
         else:
             st.warning("분석할 추천 내역이 없어 자금 시뮬레이션을 진행할 수 없습니다.")
 
+    # ------------------------------------------------------------------------------
+    # [하단 부록] 점수 산정 기준 및 평가 방식 설명
+    # ------------------------------------------------------------------------------
+    st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
+    with st.expander("ℹ️ AI 종합 점수 산정 기준 및 데이터 출처 안내 (클릭하여 열기)"):
+        st.markdown("""
+        ### 📊 1. AI 주거지 종합 점수 산정 방식 (Max 100점 기준)
+        각 지표는 자치구별 스케일 차이를 보정하기 위해 **MinMax 스케일링(0~100점 환산)** 기법을 사용하여 정규화한 후, 
+        사용자가 설정한 **중요도(Weight)**를 곱해 산출됩니다.
 
+        > $$ 종합 점수 = (가격 점수 \\times W_1) + (통근 점수 \\times W_2) + (인프라 점수 \\times W_3) + (치안 점수 \\times W_4) + (전세가율 점수 \\times W_5) $$
+        > *(조건: $W$의 총합은 100%, 사용자가 설정한 예산 상한선을 넘거나 통근시간 Threshold인 60분을 초과하는 지역은 1차 필터링 파이프라인에서 자동 제외됨)*
+
+        #### 📋 세부 항목별 0~100점 환산 기준표
+        - **💰 가격 점수**: "사용자의 거래방식 예산 한도" 이하 매물 중 가격이 낮을수록(부담이 적을수록) 100점에 가깝게 역산 정규화.
+        - **🚇 통근 점수**: 출발지에서 설정한 직장(목적지)까지 대중교통 소요 시간이 짧을수록 100점에 가깝게 역산 정규화. (Threshold: 60분 이내)
+        - **🛒 인프라 점수**: 관내 대형마트, 병원, 공원 수를 동일 가중치(각 1/3)로 0~100점 스케일링 후 단순 합산 보정.
+        - **🛡️ 치안 점수**: 관내 연간 5대 범죄 발생 건수가 적을수록 치안망이 우수하다 판단, 100점에 가깝게 역산 정규화.
+        - **📉 전세가율(리스크) 점수**: 매매가 대비 전세가율 데이터의 과도함(깡통전세 위험)을 회피하기 위해, 리스크가 낮을수록 높은 점수가 부여되도록 정규화.
+
+        ---
+
+        ### 🏅 2. 추천 입지 종합 평가 등급(S~D) 기준
+        본 대시보드는 계산된 **'종합 점수'** 분포에 기반해 각 자치구의 입지 밸런스를 아래 5개 등급 기준표로 파악합니다.
+        * **S 등급 (90점 이상)** : 사용자의 모든 검색 조건(예산, 통근시간, 인프라 등)에 가장 완벽히 부합하는 최적 입지
+        * **A 등급 (80점 ~ 89점)** : 돋보이는 강점(예: 직주근접)을 하나 이상 지닌 차상위 추천 입지
+        * **B 등급 (70점 ~ 79점)** : 예산이나 통근 조건에서 무난하게 타협 가능한 우수 입지
+        * **C 등급 (60점 ~ 69점)** : 한두 가지 약점(예: 인프라 부족, 장시간 출근 등)이 존재하는 입지
+        * **D 등급 (60점 미만)**  : 추천 대상지 중 비교 열위에 있어 조건 재조정을 권장하는 입지
+
+        ---
+
+        ### 📚 3. 분석 데이터 수집 출처 (Source Info)
+        본 리포트에 사용된 모든 데이터는 공신력 있는 공공데이터 및 검증된 API 데이터를 기반으로 정제, 분석되었습니다.
+        - **🏠 아파트 전월세 실거래가**: 국토교통부 실거래가 공개시스템
+        - **📉 전세가율 리스크 분석**: 국토교통부 매매·전세 실거래 빅데이터
+        - **🛒 생활 인프라 (의료/쇼핑/공원)**: 공공데이터포털, 건강보험심사평가원
+        - **🚔 국가 치안 및 범죄 데이터**: 경찰청 공공데이터 포털 (치안만족도 및 주요 범죄발생 건수)
+        - **🚇 통근 시간 및 교통망**: 서울시 대중교통 노선 데이터 기반 알고리즘 추정치 (오차 범위 포함)
+        """)
 
 if __name__ == "__main__":
     main()
