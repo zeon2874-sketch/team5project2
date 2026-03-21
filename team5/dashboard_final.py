@@ -135,6 +135,49 @@ def load_and_prep_data():
     
     if df is None: return None, None, None
 
+    # 신규 데이터 수집: 정비사업구역수
+    redev_file = os.path.join(data_path, "25.12기준.서울시정비사업추진현황.csv")
+    if os.path.exists(redev_file):
+        try:
+            df_redev = pd.read_csv(redev_file, encoding='utf-8')
+            if '자치구' in df_redev.columns:
+                df_redev_cnt = df_redev.groupby('자치구').size().reset_index(name='정비사업수')
+                df = df.merge(df_redev_cnt, on='자치구', how='left')
+        except: pass
+    if '정비사업수' not in df.columns: df['정비사업수'] = 0
+    df['정비사업수'] = df['정비사업수'].fillna(0)
+
+    # 신규 데이터 수집: 어린이집
+    edu_file = os.path.join(data_path, "서울시 어린이집 정보(표준 데이터).csv")
+    if os.path.exists(edu_file):
+        try:
+            df_edu = pd.read_csv(edu_file, encoding='utf-8')
+            if '시군구명' in df_edu.columns:
+                df_edu_cnt = df_edu.groupby('시군구명').size().reset_index(name='어린이집수')
+                df_edu_cnt.rename(columns={'시군구명': '자치구'}, inplace=True)
+                df = df.merge(df_edu_cnt, on='자치구', how='left')
+        except: pass
+    if '어린이집수' not in df.columns: df['어린이집수'] = 0
+    df['어린이집수'] = df['어린이집수'].fillna(0)
+
+    # 신규 데이터 수집: 전월세 실거래 (5년치)
+    rent_file = os.path.join(data_path, "서울_아파트_전월세_실거래_5개년_2021_2026.csv")
+    if os.path.exists(rent_file):
+        try:
+            df_rent = pd.read_csv(rent_file, encoding='utf-8')
+            if '구' in df_rent.columns:
+                jeonse = df_rent[df_rent['월세_만원'] == 0].groupby('구')['보증금_만원'].mean().reset_index()
+                jeonse.columns = ['자치구', '평균전세_실거래']
+                wolse = df_rent[df_rent['월세_만원'] > 0].groupby('구')[['보증금_만원', '월세_만원']].mean().reset_index()
+                wolse.columns = ['자치구', '평균보증금_월세', '평균월세_실거래']
+                df = df.merge(jeonse, on='자치구', how='left')
+                df = df.merge(wolse, on='자치구', how='left')
+                if '평균전세_실거래' in df.columns:
+                    df['평균전세가'] = df['평균전세_실거래'].fillna(df.get('평균전세가', 0))
+                if '평균월세_실거래' in df.columns:
+                    df['평균월세'] = df['평균월세_실거래'].fillna(df.get('평균월세', 0))
+        except: pass
+
     # 전세가율 데이터 (매매가 기반)
     deal_file = os.path.join(data_path, "apt_deal_total.csv")
     if os.path.exists(deal_file):
@@ -235,6 +278,12 @@ def run_analysis(df, commute_matrix, work_locs, weights, deal_type):
     res['인프라_점수'] = (res['병원_n'] + res['마트_n'] + res['공원_n']) / 3
     res['인프라_요소'] = res['공원수'] + res['마트수'] + res['병원수']
     
+    # 신규 피처: 육아, 호재 정규화
+    res['어린이집_n'] = scaler_infra.fit_transform(res[['어린이집수']]) * 100
+    res['정비사업_n'] = scaler_infra.fit_transform(res[['정비사업수']]) * 100
+    res['육아_점수'] = res['어린이집_n']
+    res['호재_점수'] = res['정비사업_n']
+    
     # 지표 정규화
     scaler = MinMaxScaler()
     price_col = '평균전세가' if deal_type == '전세' else '평균월세'
@@ -248,11 +297,13 @@ def run_analysis(df, commute_matrix, work_locs, weights, deal_type):
     w = {k: v/total_w for k, v in weights.items()}
     
     res['종합점수'] = (
-        res['가격_점수'] * w['가격'] +
-        res['통근_점수'] * w['통근'] +
-        res['인프라_점수'] * w['인프라'] +
-        res['치안_점수'] * w['치안'] +
-        res['전세가율_점수'] * w['전세가율']
+        res['가격_점수'] * w.get('가격', 0) +
+        res['통근_점수'] * w.get('통근', 0) +
+        res['인프라_점수'] * w.get('인프라', 0) +
+        res['치안_점수'] * w.get('치안', 0) +
+        res['전세가율_점수'] * w.get('전세가율', 0) +
+        res['육아_점수'] * w.get('육아', 0) +
+        res['호재_점수'] * w.get('미래가치', 0)
     )
     return res.sort_values(by='종합점수', ascending=False)
 
@@ -321,13 +372,15 @@ def main():
         work_locs = [l1]
     
     with st.sidebar.expander("⚖️ 요소별 중요도 (가중치)"):
-        w_price = st.slider("가격", 0, 100, 35)
-        w_commute = st.slider("통근", 0, 100, 30)
-        w_infra = st.slider("인프라", 0, 100, 15)
-        w_safe = st.slider("치안", 0, 100, 10)
+        w_price = st.slider("가격", 0, 100, 30)
+        w_commute = st.slider("통근", 0, 100, 25)
+        w_infra = st.slider("인프라", 0, 100, 10)
+        w_safe = st.slider("치안", 0, 100, 5)
         w_jeonse = st.slider("안전(전세가율)", 0, 100, 10)
+        w_edu = st.slider("👶 육아(어린이집)", 0, 100, 10)
+        w_dev = st.slider("🏗️ 미래가치(정비사업)", 0, 100, 10)
     
-    user_weights = {'가격': w_price, '통근': w_commute, '인프라': w_infra, '치안': w_safe, '전세가율': w_jeonse}
+    user_weights = {'가격': w_price, '통근': w_commute, '인프라': w_infra, '치안': w_safe, '전세가율': w_jeonse, '육아': w_edu, '미래가치': w_dev}
 
     # 분석 실행
     price_col = '평균전세가' if p_deal == '전세' else '평균월세'
@@ -351,8 +404,8 @@ def main():
     # ------------------------------------------------------------------------------
     # [탭 메뉴] 리포트 상세
     # ------------------------------------------------------------------------------
-    tab_rec, tab_safe, tab_infra, tab_comm, tab_money = st.tabs([
-        "🏆 추천 TOP 5", "🛡️ 치안/안전", "🛒 생활 인프라", "🚇 정밀 통근 경로", "💵 자산/대출 분석"
+    tab_rec, tab_safe, tab_infra, tab_comm, tab_trend, tab_money = st.tabs([
+        "🏆 추천 TOP 5", "🛡️ 치안/안전", "🛒 생활 인프라", "🚇 정밀 통근 경로", "📈 시세 및 미래가치", "💵 자산/대출 분석"
     ])
 
     # --- [Tab 1] 추천 TOP 5 ---
@@ -398,6 +451,7 @@ def main():
                             ▪️ <b>종합평가:</b> {score:.1f}점 <span style='color:{g_color}; font-weight:bold;'>({grade}등급)</span><br>
                             ▪️ <b>통근:</b> {row['통근시간']:.0f}분<br>
                             ▪️ <b>예산:</b> {row[price_col]:,.0f}만<br>
+                            ▪️ <b>어린이집:</b> {int(row.get('어린이집수', 0))}개소 <span style="font-size:0.8rem">|</span> <b>정비사업:</b> {int(row.get('정비사업수', 0))}구역<br>
                             🏢 <b>추천단지:</b><br><span style="color:#2b8a3e; font-size:0.8rem; line-height:1.2; display:inline-block; margin-top:3px;">{row.get('대표단지', '주요 단지')}</span><br>
                             💵 <b>필요대출액:</b> {loan_needed:,.0f}만
                         </div>
@@ -469,10 +523,10 @@ def main():
     with tab_infra:
         st.markdown("<h3 class='section-header'>🛒 주요 생활 인프라 접근성</h3>", unsafe_allow_html=True)
         if len(top_5) > 0:
-            df_infra = top_5[['자치구', '병원수', '마트수', '공원수']].melt(id_vars='자치구', var_name='인프라', value_name='시설수')
+            df_infra = top_5[['자치구', '병원수', '마트수', '공원수', '어린이집수']].melt(id_vars='자치구', var_name='인프라', value_name='시설수')
             fig_infra = px.bar(df_infra, x='자치구', y='시설수', color='인프라', barmode='group',
-                               title="TOP 5 지역별 주요 인프라(병원, 마트, 공원) 시설 수 비교",
-                               color_discrete_sequence=['#ff922b', '#51cf66', '#339af0'])
+                               title="TOP 5 지역별 주요 인프라(의료, 쇼핑, 녹지, 육아) 시설 수 비교",
+                               color_discrete_sequence=['#ff922b', '#51cf66', '#339af0', '#fcc419'])
             st.plotly_chart(fig_infra, width='stretch')
             
             st.markdown("<hr>", unsafe_allow_html=True)
@@ -486,6 +540,7 @@ def main():
             h_count = int(infra_data.get('병원수', 0))
             m_count = int(infra_data.get('마트수', 0))
             p_count = int(infra_data.get('공원수', 0))
+            e_count = int(infra_data.get('어린이집수', 0))
             
             # 폴리움 맵 중심 설정
             center_lat, center_lon = GU_COORDS.get(sel_gu_infra, [37.5665, 126.9780])
@@ -522,6 +577,7 @@ def main():
             add_density_markers(h_count, '#ff922b', '병원/의료시설')
             add_density_markers(m_count, '#51cf66', '대형마트/쇼핑')
             add_density_markers(p_count, '#339af0', '공원/녹지')
+            add_density_markers(e_count, '#fcc419', '어린이집/보육')
             
             st_folium(m_infra, width=1400, height=500, key="infra_density_map")
             
@@ -593,7 +649,28 @@ def main():
         else:
             st.warning("선택할 수 있는 대상 지역이 없습니다. 예산을 상향하거나 조건을 완화해주세요.")
 
-    # --- [Tab 5] 자산/대출 분석 (금융 라운지) ---
+    # --- [Tab 5] 시세 및 미래가치 (부동산 동향) ---
+    with tab_trend:
+        st.markdown("<h3 class='section-header'>📈 시세 및 미래가치 (정비사업 분석)</h3>", unsafe_allow_html=True)
+        st.write("각 지역구의 전월세 5개년 실거래 데이터 분포와 정비사업 추진 현황을 분석합니다.")
+        
+        c_trend1, c_trend2 = st.columns(2)
+        with c_trend1:
+            # 정비사업 수 막대 차트
+            df_top_redev = df_base.sort_values(by='정비사업수', ascending=False).head(10).copy()
+            fig_redev = px.bar(df_top_redev, x='자치구', y='정비사업수', text='정비사업수', 
+                               title="미래가치 호재(정비사업) 진행 상위 10개 구역", color_discrete_sequence=['#845ef7'])
+            fig_redev.update_traces(textposition='outside')
+            st.plotly_chart(fig_redev, width='stretch')
+            
+        with c_trend2:
+            # 실거래 분산 
+            fig_rent_trend = px.bar(top_5, x='자치구', y=price_col, title=f"TOP 5 실거래 5개년 평균가 ({p_deal}) 비교",
+                                   color_discrete_sequence=['#0ca678'], text=price_col)
+            fig_rent_trend.update_traces(texttemplate='%{text:,.0f}만', textposition='outside')
+            st.plotly_chart(fig_rent_trend, width='stretch')
+
+    # --- [Tab 6] 자산/대출 분석 (금융 라운지) ---
     with tab_money:
         st.markdown("<h3 class='section-header'>💵 내 자산 맞춤형 금융 큐레이션 라운지</h3>", unsafe_allow_html=True)
         st.write(f"💡 현재 사용자님의 연봉({p_salary:,}만원)은 수집된 데이터 기준으로 **상위 {np.random.randint(20, 50)}%** 수준에 해당합니다.")
